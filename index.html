@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Wall Calendar — Spiral Hanging Desktop Widget</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Google Fonts: Inter, JetBrains Mono & Patrick Hand -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Patrick+Hand&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                        hand: ['Patrick Hand', 'cursive', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        html, body {
+            background: transparent !important;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* Realistic Hanging Wall Calendar Shadows */
+        .calendar-assembly {
+            filter: drop-shadow(0 28px 36px rgba(0, 0, 0, 0.45)) drop-shadow(0 6px 12px rgba(0, 0, 0, 0.28));
+            transition: width 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        /* Top Photo Page */
+        .photo-page {
+            position: relative;
+            background-color: #1e293b;
+            border-radius: 10px 10px 3px 3px;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.35),
+                inset 0 -14px 20px -10px rgba(0, 0, 0, 0.55);
+            overflow: hidden;
+        }
+
+        /* Subtle Matte Paper Grain Overlay */
+        .paper-texture::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.28;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.35'/%3E%3C/svg%3E");
+            mix-blend-mode: overlay;
+        }
+
+        /* Crossfade image layers */
+        .bg-layer {
+            position: absolute;
+            inset: 0;
+            background-size: cover;
+            background-position: center;
+            transition: opacity 0.55s ease-in-out, transform 0.7s ease-out;
+        }
+
+        /* Bottom Paper Calendar Sheet */
+        .paper-sheet {
+            position: relative;
+            border-radius: 3px 3px 12px 12px;
+            transition: background-color 0.3s ease, color 0.3s ease, transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+            transform-origin: top center;
+        }
+
+        .paper-sheet.theme-light {
+            background: linear-gradient(180deg, #faf8f5 0%, #f4f1ea 100%);
+            color: #1e293b;
+            box-shadow:
+                inset 0 14px 22px -12px rgba(0, 0, 0, 0.25),
+                inset 0 -2px 0 rgba(0, 0, 0, 0.08),
+                0 2px 0 #e5e0d5,
+                0 4px 0 #d6d0c4;
+        }
+
+        .paper-sheet.theme-dark {
+            background: linear-gradient(180deg, #1e222b 0%, #171a21 100%);
+            color: #f1f5f9;
+            box-shadow:
+                inset 0 14px 22px -12px rgba(0, 0, 0, 0.65),
+                inset 0 -2px 0 rgba(255, 255, 255, 0.06),
+                0 2px 0 #12151b,
+                0 4px 0 #0c0e12;
+        }
+
+        /* Page Flip Animation */
+        @keyframes pageFlipAnim {
+            0% {
+                transform: perspective(1100px) rotateX(-16deg);
+                opacity: 0.65;
+            }
+            100% {
+                transform: perspective(1100px) rotateX(0deg);
+                opacity: 1;
+            }
+        }
+
+        .page-flipping {
+            animation: pageFlipAnim 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        /* Spiral Twin-Wire Spine Rings */
+        .spiral-wire {
+            width: 7px;
+            height: 24px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #334155 0%, #cbd5e1 35%, #f8fafc 52%, #64748b 78%, #1e293b 100%);
+            box-shadow:
+                0 3px 5px rgba(0, 0, 0, 0.55),
+                inset 0 1px 1px rgba(255, 255, 255, 0.8);
+            position: relative;
+        }
+
+        .spiral-hole-top,
+        .spiral-hole-bottom {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 10px;
+            height: 5px;
+            border-radius: 999px;
+            background: #0f172a;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.9);
+            z-index: -1;
+        }
+        .spiral-hole-top { top: -2px; }
+        .spiral-hole-bottom { bottom: -2px; }
+
+        /* Ruled Calendar Grid Cells */
+        .ruled-cell {
+            transition: background-color 0.15s ease;
+        }
+        .theme-light .ruled-cell:hover {
+            background-color: rgba(14, 165, 233, 0.07);
+        }
+        .theme-dark .ruled-cell:hover {
+            background-color: rgba(56, 189, 248, 0.08);
+        }
+
+        .cell-event-tag {
+            line-height: 1.15;
+            transition: transform 0.12s ease;
+        }
+
+        .draggable-active {
+            cursor: grab;
+        }
+        .draggable-active:active {
+            cursor: grabbing;
+        }
+
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.35);
+            border-radius: 999px;
+        }
+    </style>
+</head>
+<body class="font-sans antialiased flex flex-col justify-between min-h-screen relative">
+
+    <!-- Top Floating Desktop Control Bar -->
+    <header class="w-full z-30 px-3 sm:px-6 pt-3 pb-1 flex flex-wrap items-center justify-between gap-2 max-w-6xl mx-auto">
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="flex items-center gap-2 bg-slate-900/85 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full shadow-lg text-slate-200">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="topBarClock" class="text-xs font-mono font-semibold text-white">09:41 PM</span>
+                <span class="text-white/20">|</span>
+                <span id="topBarWeek" class="text-[11px] text-slate-400 font-mono">W46</span>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <!-- Paper Light/Dark Theme Toggle -->
+            <button onclick="togglePaperTheme()" title="Switch Paper Sheet Light/Dark" class="flex items-center gap-1.5 bg-slate-900/85 hover:bg-slate-800 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full text-xs font-medium text-slate-200 transition shadow-lg">
+                <i id="paperThemeIcon" data-lucide="sun" class="w-3.5 h-3.5 text-amber-300"></i>
+                <span id="paperThemeLabel" class="hidden sm:inline">Paper: Light</span>
+            </button>
+
+            <!-- Compact / Standard Size Toggle -->
+            <button onclick="toggleWidgetSize()" title="Toggle Widget Width" class="flex items-center gap-1.5 bg-slate-900/85 hover:bg-slate-800 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full text-xs font-medium text-slate-200 transition shadow-lg">
+                <i data-lucide="maximize-2" class="w-3.5 h-3.5 text-sky-400"></i>
+                <span id="sizeBtnLabel" class="hidden sm:inline">Size: Wall</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Desktop Workspace -->
+    <main class="flex-1 flex items-center justify-center px-3 py-4 sm:py-6 relative overflow-hidden">
+
+        <!-- Draggable Hanging Wall Calendar Assembly -->
+        <div id="widgetContainer" class="calendar-assembly w-full max-w-[560px] relative z-10">
+
+            <!-- Subtle Hanging Brass/Steel Nail Eyelet at Top Center -->
+            <div class="flex justify-center -mb-1.5 relative z-20 pointer-events-none">
+                <div class="w-4 h-4 rounded-full bg-gradient-to-b from-slate-200 to-slate-500 border border-slate-700 shadow-md flex items-center justify-center">
+                    <div class="w-1.5 h-1.5 rounded-full bg-slate-900"></div>
+                </div>
+            </div>
+
+            <!-- TOP PANEL: UNOBSTRUCTED MONTHLY PHOTOGRAPH PAGE -->
+            <div id="photoPage" data-tauri-drag-region class="photo-page paper-texture h-[230px] sm:h-[275px] w-full group draggable-active">
+
+                <!-- Dual Crossfading Wallpaper Layers -->
+                <div id="bgLayerA" data-tauri-drag-region class="bg-layer opacity-100 scale-100"></div>
+                <div id="bgLayerB" data-tauri-drag-region class="bg-layer opacity-0 scale-105"></div>
+
+                <!-- Top Drag Zone & Read-Only Group Pill -->
+                <div id="widgetDragHeader" data-tauri-drag-region class="draggable-active absolute inset-x-0 top-0 p-3 flex items-center justify-between z-20 bg-gradient-to-b from-black/45 via-black/15 to-transparent opacity-85 group-hover:opacity-100 transition-opacity">
+                    <div data-tauri-drag-region class="flex items-center gap-2 bg-black/45 backdrop-blur-md border border-white/15 px-2.5 py-1 rounded-full text-[11px] text-white/95 shadow">
+                        <span id="photoCaptionPill" class="font-medium pointer-events-none">🍂 Autumn Ridge</span>
+                        <span class="text-white/30 pointer-events-none">•</span>
+                        <span id="groupBadgeLabel" class="font-mono text-[10px] text-emerald-300 pointer-events-none">FRIENDS-2026</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENTER SPINE: METALLIC TWIN-WIRE SPIRAL BINDING -->
+            <div id="spiralSpine" class="relative z-30 h-3 -my-1.5 px-5 sm:px-8 flex items-center justify-between pointer-events-none"></div>
+
+            <!-- BOTTOM PANEL: CRISP RULED WALL CALENDAR PAPER SHEET -->
+            <div id="paperSheet" class="paper-sheet theme-light paper-texture pt-5 pb-4 px-4 sm:px-6">
+
+                <div data-tauri-drag-region class="flex items-center justify-between mb-3 draggable-active">
+                    <button onclick="changeMonth(-1)" aria-label="Previous Month" class="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition opacity-65 hover:opacity-100">
+                        <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                    </button>
+
+                    <div data-tauri-drag-region class="text-center flex flex-col items-center">
+                        <div data-tauri-drag-region class="flex items-center gap-2">
+                            <h1 id="calendarMonthTitle" data-tauri-drag-region class="text-xl sm:text-2xl font-extrabold tracking-[0.18em] uppercase">NOVEMBER</h1>
+                            <span id="calendarYearTitle" data-tauri-drag-region class="text-lg sm:text-xl font-light tracking-[0.12em] opacity-65">2026</span>
+                        </div>
+                        <button id="returnTodayBtn" onclick="jumpToToday()" class="hidden mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-rose-600 hover:underline">
+                            ↩ Jump back to Today
+                        </button>
+                    </div>
+
+                    <button onclick="changeMonth(1)" aria-label="Next Month" class="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition opacity-65 hover:opacity-100">
+                        <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-7 text-center pb-1.5 border-b border-current/15">
+                    <div class="text-[10px] sm:text-[11px] font-bold tracking-[0.14em] text-rose-600/80">SUN</div>
+                    <div class="text-[10px] sm:text-[11px] font-bold tracking-[0.14em] opacity-65">MON</div>
+                    <div class="text-[10px] sm:text-[11px] font-bold tracking-[0.14em] opacity-65">TUE</div>
+                    <div class="text-[10px] sm:text-[11px] font-bold tracking-[0.14em] opacity-65">WED</div>
+                    <div class="text-[10px] sm:text-[11px] font-bold tracking-[0.14em] opacity-65">THU</div>
+                    <div class="text-[10px] sm:text-[11px] font-bold tracking-[0.14em] opacity-65">FRI</div>
+                    <div class="text-[10px] sm:text-[11px] font-bold tracking-[0.14em] text-sky-600/80">SAT</div>
+                </div>
+
+                <div id="calendarGrid" class="grid grid-cols-7 border-l border-current/15"></div>
+
+                <div class="mt-3 pt-2 flex items-center justify-between text-[11px] opacity-65">
+                    <div class="flex items-center gap-3">
+                        <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-sky-500"></span> Personal</span>
+                        <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Work</span>
+                        <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Social</span>
+                    </div>
+                    <span>Click any square to write an event</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- DAY DETAIL & EVENT EDITOR POPOVER MODAL -->
+    <div id="dayModal" class="hidden fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target === this) closeDayModal()">
+        <div class="bg-[#faf8f5] text-slate-800 border border-slate-300 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div class="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <div>
+                    <span id="dayModalWeekday" class="text-[11px] font-mono uppercase tracking-widest text-sky-300">FRIDAY</span>
+                    <h3 id="dayModalTitle" class="text-lg font-bold">November 13, 2026</h3>
+                </div>
+                <button onclick="closeDayModal()" class="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 transition">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="p-5">
+                <div id="dayModalEventsList" class="space-y-2 max-h-52 overflow-y-auto mb-4"></div>
+
+                <form onsubmit="handleAddEvent(event)" class="pt-3 border-t border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold uppercase tracking-wider text-slate-500">Write on Calendar</label>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="selectCategory('personal')" id="cat-personal" class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-sky-100 text-sky-800 ring-2 ring-sky-500 transition">Personal</button>
+                            <button type="button" onclick="selectCategory('work')" id="cat-work" class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 opacity-60 hover:opacity-100 transition">Work</button>
+                            <button type="button" onclick="selectCategory('social')" id="cat-social" class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 opacity-60 hover:opacity-100 transition">Social</button>
+                        </div>
+                    </div>
+
+                    <input type="text" id="eventTitleInput" placeholder="e.g., Dinner at 7pm, Dentist, Movie night..." required maxlength="50" class="w-full bg-white border border-slate-300 focus:border-slate-900 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none shadow-sm" />
+
+                    <div class="flex items-center gap-2">
+                        <input type="time" id="eventTimeInput" class="bg-white border border-slate-300 focus:border-slate-900 rounded-xl px-3 py-2 text-xs text-slate-700 outline-none shadow-sm" />
+                        <button type="submit" class="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs py-2.5 px-4 rounded-xl transition flex items-center justify-center gap-1.5 shadow">
+                            <i data-lucide="pen-line" class="w-3.5 h-3.5"></i>
+                            <span>Add to Square</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <div class="bg-slate-900/95 border border-white/15 text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2 text-xs font-medium backdrop-blur-md">
+            <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
+            <span id="toastMessage">Saved!</span>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================================
+        // SUPABASE CONFIGURATION & SYNC (Read-Only Theme Sync for End Users)
+        // =========================================================================
+        const SUPABASE_URL = 'https://cpwgxhyrwnkknyvddhzb.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_NzWrY6RRMsrKQ64rp9BcuA_7b6x9btl';
+
+        let supabaseClient = null;
+        try {
+            if (window.supabase && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            }
+        } catch (e) {
+            console.warn('Supabase offline mode / unconfigured credentials:', e);
+        }
+
+        const MONTH_NAMES = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ];
+
+        const DEFAULT_MONTH_THEMES = [
+            { caption: "🌲 Misty Pine Morning", url: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1400&q=80" },
+            { caption: "❄️ Alpine Snowfall", url: "https://images.unsplash.com/photo-1483664852095-d6cc6870702d?auto=format&fit=crop&w=1400&q=80" },
+            { caption: "🌿 Emerald Creek", url: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1400&q=80" },
+            { caption: "🌸 Spring Blossoms", url: "https://images.unsplash.com/photo-1522383225653-ed111181a951?auto=format&fit=crop&w=1400&q=80" },
+            { caption: "⛰️ Wildflower Meadow", url: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1400&q=80" },
+            { caption: "☀️ Summer Coastline", url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80" },
+            { caption: "🏔️ Sunlit Glacial Lake", url: "https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&w=1400&q=80" },
+            { caption: "🏕️ Mountain Campfire", url: "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=1400&q=80" },
+            { caption: "🍂 Autumn Ridge", url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80" },
+            { caption: "🎃 Misty Valley", url: "https://images.unsplash.com/photo-1509114397022-ed747cca3f65?auto=format&fit=crop&w=1400&q=80" },
+            { caption: "❄️ First Snow", url: "https://images.unsplash.com/photo-1517299321609-52687d1bc55a?auto=format&fit=crop&w=1400&q=80" },
+            { caption: "✨ Winter Starry Night", url: "https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=1400&q=80" }
+        ];
+
+        let monthThemes = [...DEFAULT_MONTH_THEMES];
+        let currentViewingDate = new Date();
+        let paperTheme = 'light';
+        let widgetSize = 'wall';
+        let savedEvents = {};
+        let selectedCategory = 'personal';
+        let activeModalDateStr = null;
+
+        // Fetch live monthly photo themes from Supabase on startup
+        async function loadSupabaseThemes() {
+            if (!supabaseClient) return;
+            try {
+                let { data, error } = await supabaseClient.from('monthly_themes').select('*').order('month_index', { ascending: true });
+                if (!error && data && data.length > 0) {
+                    data.forEach(row => {
+                        if (row.month_index >= 0 && row.month_index < 12) {
+                            monthThemes[row.month_index] = { caption: row.caption, url: row.image_url };
+                        }
+                    });
+                    renderCalendar();
+                }
+            } catch (err) {
+                console.warn('Supabase theme sync offline:', err);
+            }
+        }
+
+        // Local Storage Event Persistence
+        function loadLocalEvents() {
+            try {
+                const stored = localStorage.getItem('wall_calendar_saved_events');
+                if (stored) {
+                    savedEvents = JSON.parse(stored);
+                }
+            } catch (err) {
+                console.error('Failed to load local events:', err);
+                savedEvents = {};
+            }
+        }
+
+        function persistLocalEvents() {
+            try {
+                localStorage.setItem('wall_calendar_saved_events', JSON.stringify(savedEvents));
+            } catch (err) {
+                console.error('Failed to save local events:', err);
+            }
+        }
+
+        // Window Dragging for Tauri v2
+        function initWindowDrag() {
+            const dragTargets = document.querySelectorAll('[data-tauri-drag-region]');
+            dragTargets.forEach(el => {
+                el.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0 || e.target.closest('button') || e.target.closest('input')) {
+                        return;
+                    }
+                    if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+                        window.__TAURI_INTERNALS__.invoke('plugin:window|start_dragging').catch(() => {});
+                    } else if (window.__TAURI__ && window.__TAURI__.window) {
+                        window.__TAURI__.window.getCurrentWindow().startDragging().catch(() => {});
+                    }
+                });
+            });
+        }
+
+        function initApp() {
+            renderSpiralRings();
+            loadSupabaseThemes();
+            loadLocalEvents();
+            renderCalendar();
+            initWindowDrag();
+            setInterval(updateLiveClocks, 1000);
+            updateLiveClocks();
+            lucide.createIcons();
+        }
+
+        function renderSpiralRings() {
+            const spine = document.getElementById('spiralSpine');
+            spine.innerHTML = '';
+            const count = 14;
+            for (let i = 0; i < count; i++) {
+                const wire = document.createElement('div');
+                wire.className = 'spiral-wire';
+                wire.innerHTML = `
+                    <div class="spiral-hole-top"></div>
+                    <div class="spiral-hole-bottom"></div>
+                `;
+                spine.appendChild(wire);
+            }
+        }
+
+        function updateLiveClocks() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('topBarClock').textContent = timeStr;
+        }
+
+        function renderCalendar() {
+            const year = currentViewingDate.getFullYear();
+            const month = currentViewingDate.getMonth();
+
+            document.getElementById('calendarMonthTitle').textContent = MONTH_NAMES[month];
+            document.getElementById('calendarYearTitle').textContent = year;
+
+            const theme = monthThemes[month];
+            document.getElementById('bgLayerA').style.backgroundImage = `url('${theme.url}')`;
+            document.getElementById('photoCaptionPill').textContent = theme.caption;
+
+            const firstDayIndex = new Date(year, month, 1).getDay();
+            const totalDays = new Date(year, month + 1, 0).getDate();
+            const prevTotalDays = new Date(year, month, 0).getDate();
+
+            const grid = document.getElementById('calendarGrid');
+            grid.innerHTML = '';
+
+            const today = new Date();
+            const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+
+            for (let i = firstDayIndex - 1; i >= 0; i--) {
+                const dayNum = prevTotalDays - i;
+                grid.appendChild(createCellElement(dayNum, true, false));
+            }
+
+            for (let d = 1; d <= totalDays; d++) {
+                const isToday = isCurrentMonth && today.getDate() === d;
+                grid.appendChild(createCellElement(d, false, isToday, year, month, d));
+            }
+
+            const totalCellsSoFar = firstDayIndex + totalDays;
+            const remainingCells = totalCellsSoFar % 7 === 0 ? 0 : 7 - (totalCellsSoFar % 7);
+            for (let d = 1; d <= remainingCells; d++) {
+                grid.appendChild(createCellElement(d, true, false));
+            }
+
+            lucide.createIcons();
+        }
+
+        function createCellElement(dayNum, isMuted, isToday, year, month, day) {
+            const cell = document.createElement('div');
+            cell.className = `ruled-cell min-h-[72px] sm:min-h-[85px] p-1.5 border-r border-b border-current/15 relative flex flex-col justify-between ${isMuted ? 'opacity-35' : ''}`;
+
+            const topRow = document.createElement('div');
+            topRow.className = 'flex items-center justify-between';
+
+            const numSpan = document.createElement('span');
+            numSpan.className = `text-xs sm:text-sm font-mono font-semibold px-1.5 py-0.5 rounded-md ${isToday ? 'bg-rose-600 text-white shadow' : ''}`;
+            numSpan.textContent = dayNum;
+            topRow.appendChild(numSpan);
+            cell.appendChild(topRow);
+
+            if (!isMuted && year !== undefined) {
+                const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                cell.onclick = () => openDayModal(year, month, day, dateKey);
+                cell.style.cursor = 'pointer';
+
+                if (savedEvents[dateKey] && savedEvents[dateKey].length > 0) {
+                    const eventsContainer = document.createElement('div');
+                    eventsContainer.className = 'space-y-1 mt-1 overflow-hidden max-h-[48px]';
+                    savedEvents[dateKey].forEach(ev => {
+                        const pill = document.createElement('div');
+                        let colorClass = paperTheme === 'dark'
+                            ? 'bg-sky-400/25 text-sky-200 border-sky-400/40'
+                            : 'bg-sky-500/20 text-sky-900 border-sky-300';
+
+                        if (ev.cat === 'work') {
+                            colorClass = paperTheme === 'dark'
+                                ? 'bg-amber-400/25 text-amber-200 border-amber-400/40'
+                                : 'bg-amber-500/20 text-amber-900 border-amber-300';
+                        }
+                        if (ev.cat === 'social') {
+                            colorClass = paperTheme === 'dark'
+                                ? 'bg-emerald-400/25 text-emerald-200 border-emerald-400/40'
+                                : 'bg-emerald-500/20 text-emerald-900 border-emerald-300';
+                        }
+
+                        pill.className = `cell-event-tag text-[10px] font-hand font-medium px-1.5 py-0.5 rounded border ${colorClass} truncate shadow-sm`;
+                        pill.textContent = ev.title;
+                        eventsContainer.appendChild(pill);
+                    });
+                    cell.appendChild(eventsContainer);
+                }
+            }
+
+            return cell;
+        }
+
+        function changeMonth(direction) {
+            currentViewingDate.setMonth(currentViewingDate.getMonth() + direction);
+            renderCalendar();
+            triggerPageFlipAnimation();
+        }
+
+        function triggerPageFlipAnimation() {
+            const sheet = document.getElementById('paperSheet');
+            sheet.classList.add('page-flipping');
+            setTimeout(() => sheet.classList.remove('page-flipping'), 420);
+        }
+
+        function togglePaperTheme() {
+            paperTheme = paperTheme === 'light' ? 'dark' : 'light';
+            const sheet = document.getElementById('paperSheet');
+            const icon = document.getElementById('paperThemeIcon');
+            const label = document.getElementById('paperThemeLabel');
+
+            if (paperTheme === 'dark') {
+                sheet.classList.remove('theme-light');
+                sheet.classList.add('theme-dark');
+                icon.setAttribute('data-lucide', 'moon');
+                label.textContent = 'Paper: Dark';
+            } else {
+                sheet.classList.remove('theme-dark');
+                sheet.classList.add('theme-light');
+                icon.setAttribute('data-lucide', 'sun');
+                label.textContent = 'Paper: Light';
+            }
+            lucide.createIcons();
+            renderCalendar(); // Re-renders grid instantly with correct theme event styles
+        }
+
+        function toggleWidgetSize() {
+            const container = document.getElementById('widgetContainer');
+            const label = document.getElementById('sizeBtnLabel');
+            if (widgetSize === 'wall') {
+                widgetSize = 'compact';
+                container.classList.remove('max-w-[560px]');
+                container.classList.add('max-w-[380px]');
+                label.textContent = 'Size: Compact';
+            } else {
+                widgetSize = 'wall';
+                container.classList.remove('max-w-[380px]');
+                container.classList.add('max-w-[560px]');
+                label.textContent = 'Size: Wall';
+            }
+        }
+
+        function openDayModal(year, month, day, dateKey) {
+            activeModalDateStr = dateKey;
+            const dateObj = new Date(year, month, day);
+            const weekday = dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+            const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+            document.getElementById('dayModalWeekday').textContent = weekday;
+            document.getElementById('dayModalTitle').textContent = formattedDate;
+
+            renderDayEventsList();
+            document.getElementById('dayModal').classList.remove('hidden');
+        }
+
+        function closeDayModal() {
+            document.getElementById('dayModal').classList.add('hidden');
+            activeModalDateStr = null;
+            renderCalendar();
+        }
+
+        function selectCategory(cat) {
+            selectedCategory = cat;
+            ['personal', 'work', 'social'].forEach(c => {
+                const btn = document.getElementById(`cat-${c}`);
+                if (c === cat) {
+                    btn.className = `px-2 py-0.5 rounded-full text-[11px] font-semibold bg-${c === 'personal' ? 'sky' : c === 'work' ? 'amber' : 'emerald'}-100 text-${c === 'personal' ? 'sky' : c === 'work' ? 'amber' : 'emerald'}-800 ring-2 ring-${c === 'personal' ? 'sky' : c === 'work' ? 'amber' : 'emerald'}-500 transition`;
+                } else {
+                    btn.className = `px-2 py-0.5 rounded-full text-[11px] font-semibold bg-${c === 'personal' ? 'sky' : c === 'work' ? 'amber' : 'emerald'}-100 text-${c === 'personal' ? 'sky' : c === 'work' ? 'amber' : 'emerald'}-800 opacity-60 hover:opacity-100 transition`;
+                }
+            });
+        }
+
+        function handleAddEvent(e) {
+            e.preventDefault();
+            const title = document.getElementById('eventTitleInput').value.trim();
+            if (!title || !activeModalDateStr) return;
+
+            if (!savedEvents[activeModalDateStr]) {
+                savedEvents[activeModalDateStr] = [];
+            }
+            savedEvents[activeModalDateStr].push({ title, cat: selectedCategory });
+
+            persistLocalEvents();
+
+            document.getElementById('eventTitleInput').value = '';
+            renderDayEventsList();
+            renderCalendar();
+            showToast('Event saved locally!');
+        }
+
+        function renderDayEventsList() {
+            const listEl = document.getElementById('dayModalEventsList');
+            listEl.innerHTML = '';
+
+            const events = savedEvents[activeModalDateStr] || [];
+            if (events.length === 0) {
+                listEl.innerHTML = '<p class="text-xs text-slate-400 text-center py-3">No events written on this date yet.</p>';
+                return;
+            }
+
+            events.forEach((ev, idx) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between bg-white border border-slate-200 px-3 py-2 rounded-xl text-xs text-slate-800 shadow-sm';
+                row.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-${ev.cat === 'personal' ? 'sky' : ev.cat === 'work' ? 'amber' : 'emerald'}-500"></span>
+                        <span class="font-medium">${ev.title}</span>
+                    </div>
+                    <button onclick="deleteEvent('${activeModalDateStr}', ${idx})" class="text-slate-400 hover:text-rose-600 transition">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                `;
+                listEl.appendChild(row);
+            });
+            lucide.createIcons();
+        }
+
+        function deleteEvent(dateKey, idx) {
+            if (savedEvents[dateKey]) {
+                savedEvents[dateKey].splice(idx, 1);
+                if (savedEvents[dateKey].length === 0) delete savedEvents[dateKey];
+                persistLocalEvents();
+                renderDayEventsList();
+                renderCalendar();
+                showToast('Deleted event');
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toastNotification');
+            document.getElementById('toastMessage').textContent = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        window.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
